@@ -74,10 +74,10 @@ int main(int argc, char* argv[]) {
             printf("\t%s\n", "ARGUMENTS:");
             printf("\t%s\n", "REQUEST_PORT\t- the port for the container for which this one is waiting");
             printf("\t%s\n", "");
+            exit(0);
         } else {
             exit(1);
         }
-        exit(0);
     }
     if (argc-optind!=1) {
         log_error("usage: ./next-wait [-v] [-d] [-h] REQUEST_PORT", 1);

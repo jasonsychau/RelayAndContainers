@@ -78,10 +78,10 @@ int main(int argc, char* argv[]) {
             printf("\t%s\n", "MY_PORT\t\t- this container or program port");
             printf("\t%s\n", "NEXT_PORT\t- the container or program port from which this program is expecting a close request");
             printf("\t%s\n", "");
+            exit(0);
         } else {
             exit(1);
         }
-        exit(0);
     }
     if (argc-optind!=2&&argc-optind!=3) {
         log_error("usage: ./next-pass [-v] [-d] [-h] REQUEST_PORT MY_PORT [NEXT_PORT]", 1);
