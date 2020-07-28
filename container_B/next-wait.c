@@ -6,6 +6,7 @@
 #include <sys/socket.h> 
 #include <arpa/inet.h> 
 #include <netinet/in.h> 
+#include <netdb.h>
 #include <errno.h>
 #include "relay.h"
 
@@ -54,6 +55,7 @@ int main(int argc, char* argv[]) {
             debug = 0;
     uint16_t s_port;
     struct sockaddr_in server_addr, client_addr; 
+    struct hostent *he;
     struct timeval timeout;
     int sockfd, n, len = sizeof(server_addr);
     while((n = getopt(argc, argv, "vdh")) != -1) {  
@@ -63,7 +65,7 @@ int main(int argc, char* argv[]) {
             debug = 1;
         } else if (n=='h') {
             printf("\t%s\n", "");
-            printf("\t%s\n", "./next-wait [-v] [-d] [-h] REQUEST_PORT");
+            printf("\t%s\n", "./next-wait [-v] [-d] [-h] REQUEST_HOST REQUEST_PORT");
             printf("\t%s\n", "===========================================================");
             printf("\t%s\n", "");
             printf("\t%s\n", "OPTIONS:");
@@ -72,20 +74,21 @@ int main(int argc, char* argv[]) {
             printf("\t%s\n", "-h (Help)\t- to print help page");
             printf("\t%s\n", "");
             printf("\t%s\n", "ARGUMENTS:");
-            printf("\t%s\n", "REQUEST_PORT\t- the port for the container for which this one is waiting");
+            printf("\t%s\n", "REQUEST_HOST\t- service name or network host for the container for which this one is waiting");
+            printf("\t%s\n", "REQUEST_PORT\t- port for the container for which this one is waiting");
             printf("\t%s\n", "");
             exit(0);
         } else {
             exit(1);
         }
     }
-    if (argc-optind!=1) {
-        log_error("usage: ./next-wait [-v] [-d] [-h] REQUEST_PORT", 1);
+    if (argc-optind!=2) {
+        log_error("usage: ./next-wait [-v] [-d] [-h] REQUEST_HOST REQUEST_PORT", 1);
     }
-    if ((n = atoi(argv[optind])) == 0) {
-        log_error("First argument is not readable port number.", 1);
+    if ((n = atoi(argv[optind+1])) == 0) {
+        log_error("Second argument is not readable port number.", 1);
     } else if (n<0 || n>25535) {
-        log_error("First argument is invalid sending port.", 1);
+        log_error("Second argument is invalid sending port.", 1);
     } else {
         s_port = (uint16_t)n;
     }
@@ -99,10 +102,13 @@ int main(int argc, char* argv[]) {
         log_error("Cannot set socket options", EXIT_FAILURE);
     }
 
+    if ((he = gethostbyname(argv[optind]))==NULL) {
+        log_error("Cannot resolve hostname", EXIT_FAILURE);
+    }
     memset(&server_addr, 0, sizeof(server_addr)); 
-    server_addr.sin_family = AF_INET; 
-    server_addr.sin_port = htons(s_port); 
-    server_addr.sin_addr.s_addr = INADDR_ANY;
+    memcpy(&server_addr.sin_addr, he->h_addr_list[0], he->h_length);
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(s_port);
 
     relayItemType buffer, msg;
     if (verbose||debug) log_msg("Waiting for ready reply");
@@ -117,7 +123,7 @@ int main(int argc, char* argv[]) {
             find_net_error();
         } else if (n == 0) {
             if (debug) log_warning("No data read");
-        } else if (buffer==READY_MSG&&ntohs(client_addr.sin_port)==s_port) {
+        } else if (buffer==READY_MSG&&memcmp(&client_addr.sin_addr, he->h_addr_list[0], he->h_length)==0&&ntohs(client_addr.sin_port)==s_port) {
             if (verbose||debug) log_msg("Wait is done.");
             break;
         } else if (debug) {

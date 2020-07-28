@@ -2,7 +2,7 @@
 
 # run your setup
 
-./first $MY_PORT $NEXT_PORT
+./first $MY_PORT "container-b" $NEXT_PORT
 
 # run others
 

@@ -5,10 +5,10 @@
 #include <sys/types.h> 
 #include <sys/socket.h> 
 #include <arpa/inet.h> 
+#include <netdb.h>
 #include <netinet/in.h> 
 #include <errno.h>
 #include "relay.h"
-
 
 void log_msg(char* msg) {
     printf("first:\t%s\n", msg);
@@ -57,6 +57,7 @@ int main(int argc, char* argv[]) {
             closing = 0;
     uint16_t l_port, s_port;
     struct sockaddr_in server_addr, client_addr; 
+    struct hostent *he;
     int n, sockfd, len = sizeof(server_addr);
     relayItemType buffer, msg;
     while((n=getopt(argc, argv, "vdh")) != -1) {  
@@ -66,7 +67,7 @@ int main(int argc, char* argv[]) {
             debug = 1;
         } else if (n=='h') {
             printf("\t%s\n", "");
-            printf("\t%s\n", "./first [-v] [-d] [-h] MY_PORT [NEXT_PORT]");
+            printf("\t%s\n", "./first [-v] [-d] [-h] MY_PORT [NEXT_HOST NEXT_PORT]");
             printf("\t%s\n", "===========================================================");
             printf("\t%s\n", "");
             printf("\t%s\n", "OPTIONS:");
@@ -76,15 +77,16 @@ int main(int argc, char* argv[]) {
             printf("\t%s\n", "");
             printf("\t%s\n", "ARGUMENTS:");
             printf("\t%s\n", "MY_PORT\t\t- this container or program port");
-            printf("\t%s\n", "NEXT_PORT\t- the container or program port from which this program is expecting a close request");
+            printf("\t%s\n", "NEXT_HOST\t- service name or network host name from which this program is expecting a close request");
+            printf("\t%s\n", "NEXT_PORT\t- port from which this program is expecting a close request");
             printf("\t%s\n", "");
             exit(0);
         } else {
             exit(1);
         }
     }
-    if (argc-optind!=1&&argc-optind!=2) {
-        log_error("usage: ./first [-v] [-d] [-h] MY_PORT [NEXT_PORT]", 1);
+    if (argc-optind!=1&&argc-optind!=3) {
+        log_error("usage: ./first [-v] [-d] [-h] MY_PORT [NEXT_HOST NEXT_PORT]", 1);
     }
     if ((n=atoi(argv[optind]))==0) {
         log_error("First argument is not readable port number.", 1);
@@ -93,12 +95,12 @@ int main(int argc, char* argv[]) {
     } else {
         l_port = (uint16_t)n;
     }
-    if (argc-optind==2) {
+    if (argc-optind==3) {
         closing = 1;
-        if ((n = atoi(argv[optind+1])) == 0) {
-            log_error("Second argument is not readable port number.", 1);
+        if ((n = atoi(argv[optind+2])) == 0) {
+            log_error("Third argument is not readable port number.", 1);
         } else if (n<0||n>25535) {
-            log_error("Second argument is invalid sending port.", 1);
+            log_error("Third argument is invalid sending port.", 1);
         } else {
             s_port = (uint16_t)n;
         }
@@ -114,6 +116,9 @@ int main(int argc, char* argv[]) {
     if (bind(sockfd, (const struct sockaddr*)&server_addr, sizeof(server_addr))<0) { 
         log_error("Cannot bind socket to network address", EXIT_FAILURE);
     }
+    if (closing==1&&(he = gethostbyname(argv[optind+1]))==NULL) {
+        log_error("Cannot resolve hostname", EXIT_FAILURE);
+    }
     
     if (verbose||debug) log_msg("Preparing to pass ready signal.");
     while (1) {
@@ -127,7 +132,7 @@ int main(int argc, char* argv[]) {
             msg = READY_MSG;
             sendto(sockfd, &msg, sizeof(msg), MSG_CONFIRM, (const struct sockaddr*)&client_addr, len);
             if (verbose||debug) log_msg("Sent ready signal");
-        } else if (buffer==CLOSE_MSG&&closing==1&&ntohs(client_addr.sin_port)==s_port) {
+        } else if (buffer==CLOSE_MSG&&closing==1&&memcmp(&client_addr.sin_addr, he->h_addr_list[0], he->h_length)==0&&ntohs(client_addr.sin_port)==s_port) {
             struct timeval timeout;
             timeout.tv_sec = 5;
             timeout.tv_usec = 0;
@@ -135,10 +140,10 @@ int main(int argc, char* argv[]) {
                 log_error("Cannot set socket options", EXIT_FAILURE);
             }
 
-            memset(&server_addr, 0, sizeof(server_addr)); 
-            server_addr.sin_family = AF_INET; 
-            server_addr.sin_port = htons(s_port); 
-            server_addr.sin_addr.s_addr = INADDR_ANY;
+            memset(&server_addr, 0, sizeof(server_addr));
+            memcpy(&server_addr.sin_addr, he->h_addr_list[0], he->h_length);
+            server_addr.sin_family = AF_INET;
+            server_addr.sin_port = htons(s_port);
 
             uint8_t attempts = 0;
             if (verbose||debug) log_msg("Preparing pass");
@@ -164,7 +169,7 @@ int main(int argc, char* argv[]) {
                         msg = READY_MSG;
                         sendto(sockfd, &msg, sizeof(msg), MSG_CONFIRM, (const struct sockaddr*)&client_addr, len);
                         if (verbose||debug) log_msg("Sent ready signal");
-                    } else if (buffer==CONFIRM_MSG&&ntohs(client_addr.sin_port)==s_port) {
+                    } else if (buffer==CONFIRM_MSG&&memcmp(&client_addr.sin_addr, he->h_addr_list[0], he->h_length)==0&&ntohs(client_addr.sin_port)==s_port) {
                         if (verbose||debug) log_msg("Closing");
                         break;
                     } else if (buffer==CONFIRM_MSG) {

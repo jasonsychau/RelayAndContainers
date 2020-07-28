@@ -2,9 +2,7 @@ version: '3.4'
 services:
     container-a:
         build: container_A/.
-        network_mode: host
     container-b:
         depends_on: 
             - container-a
         build: container_B/.
-        network_mode: host

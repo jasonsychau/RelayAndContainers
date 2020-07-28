@@ -1,8 +1,8 @@
 #!/bin/sh
 
-./next-wait $OTHER_PORT
+./next-wait "container-a" $OTHER_PORT
 
 # run commands
 
-./next-pass $OTHER_PORT $MY_PORT
+./next-pass "container-a" $OTHER_PORT $MY_PORT
 
