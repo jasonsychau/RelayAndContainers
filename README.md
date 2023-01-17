@@ -6,7 +6,7 @@ This is a small template for a project run on Docker Containers.
 
 Queuing containers is flexible by different orders of the programs in src directory.
 
-The project is given name by the order that is given to your container orchestration.
+The programs are given name by the order that is given to your container orchestration.
 
 
 ### Programs Description
